@@ -7,10 +7,30 @@ import { getTaskConfig, type TaskKey } from '@/lib/site-config'
 import type { SiteFeedPagination, SitePost } from '@/lib/site-connector'
 import { taskPageMetadata } from '@/config/site.content'
 import { taskPageVoices } from '@/editable/content/task-pages.content'
+import { Ads } from '@/lib/ads'
 import { EditableSiteShell } from '@/editable/shell/EditableSiteShell'
 import { getTaskTheme, taskThemeStyle } from '@/editable/theme/task-themes'
 
 export const revalidate = 3
+
+// Varied placement per archive surface; shape/fit stay locked in src/lib/ads.
+const AD_SLOT_POOL = ['in-feed', 'header', 'footer', 'article-bottom', 'sidebar'] as const
+function hashSeed(seed: string) {
+  let h = 0
+  for (let i = 0; i < seed.length; i += 1) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  return h
+}
+function pickAdSlot(seed: string) {
+  return AD_SLOT_POOL[hashSeed(seed) % AD_SLOT_POOL.length]
+}
+// Seeded position so the ad lands somewhere inside the feed (never pinned to the
+// very top), and varies page to page. Keeps at least a couple of cards above it.
+function seededAdIndex(seed: string, length: number) {
+  if (length <= 3) return length
+  const min = 2
+  const max = length - 1
+  return min + (hashSeed(`${seed}-pos`) % (max - min + 1))
+}
 
 export const taskMetadata = (task: TaskKey, path: string) =>
   buildTaskMetadata(task, {
@@ -141,15 +161,40 @@ export function TaskArchiveView({ task, posts, pagination, category, basePath }:
 
         <section className="mx-auto max-w-[var(--editable-container)] px-6 py-16 sm:py-20 lg:px-8">
           {posts.length ? (
-            <div className={taskGrid[task]}>
-              {posts.map((post, index) => <ArchivePostCard key={post.id || post.slug} post={post} task={task} basePath={basePath} index={index} />)}
-            </div>
+            (() => {
+              const adSlot = pickAdSlot(`${task}-${category}-archive`)
+              const adAt = seededAdIndex(`${task}-${category}-${page}`, posts.length)
+              const before = posts.slice(0, adAt)
+              const after = posts.slice(adAt)
+              return (
+                <>
+                  {before.length ? (
+                    <div className={taskGrid[task]}>
+                      {before.map((post, index) => <ArchivePostCard key={post.id || post.slug} post={post} task={task} basePath={basePath} index={index} />)}
+                    </div>
+                  ) : null}
+                  <div className="my-14 flex justify-center">
+                    <Ads slot={adSlot} showLabel className="w-full" />
+                  </div>
+                  {after.length ? (
+                    <div className={taskGrid[task]}>
+                      {after.map((post, index) => <ArchivePostCard key={post.id || post.slug} post={post} task={task} basePath={basePath} index={adAt + index} />)}
+                    </div>
+                  ) : null}
+                </>
+              )
+            })()
           ) : (
-            <div className="mx-auto max-w-xl rounded-[var(--tk-radius)] border border-dashed border-[var(--tk-line)] bg-[var(--tk-surface)] px-8 py-16 text-center">
-              <Search className="mx-auto h-7 w-7 text-[var(--tk-muted)]" />
-              <h2 className="editable-display mt-5 text-2xl font-semibold tracking-[-0.02em]">Nothing here yet</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--tk-muted)]">Try another category, or check back after new {label.toLowerCase()} are published.</p>
-            </div>
+            <>
+              <div className="mx-auto max-w-xl rounded-[var(--tk-radius)] border border-dashed border-[var(--tk-line)] bg-[var(--tk-surface)] px-8 py-16 text-center">
+                <Search className="mx-auto h-7 w-7 text-[var(--tk-muted)]" />
+                <h2 className="editable-display mt-5 text-2xl font-semibold tracking-[-0.02em]">Nothing here yet</h2>
+                <p className="mt-2 text-sm leading-6 text-[var(--tk-muted)]">Try another category, or check back after new {label.toLowerCase()} are published.</p>
+              </div>
+              <div className="mt-14 flex justify-center">
+                <Ads slot={pickAdSlot(`${task}-${category}-archive`)} showLabel className="w-full" />
+              </div>
+            </>
           )}
 
           {posts.length ? (
