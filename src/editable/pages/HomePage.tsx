@@ -29,7 +29,11 @@ function uniquePosts(posts: SitePost[]) {
 }
 
 export default async function HomePage() {
-  const primaryTask = (SITE_CONFIG.tasks.find((task) => task.enabled)?.key || 'article') as TaskKey
+  // The public experience centers on collections/bookmarks. Prefer the `sbm`
+  // surface as primary (never `profile`, which is kept out of the public UI),
+  // falling back to the first enabled non-profile task.
+  const publicTasks = SITE_CONFIG.tasks.filter((task) => task.enabled && task.key !== 'profile')
+  const primaryTask = ((publicTasks.find((task) => task.key === 'sbm') || publicTasks[0])?.key || 'sbm') as TaskKey
   const primaryRoute = SITE_CONFIG.taskViews[primaryTask] || `/${primaryTask}`
   const taskFeed: TaskFeedItem[] = await fetchHomeTaskFeed(12, { timeoutMs: 2500 })
   const primaryPosts = uniquePosts(taskFeed.find(({ task }) => task.key === primaryTask)?.posts || taskFeed.flatMap(({ posts }) => posts)).slice(0, 24)
@@ -62,7 +66,7 @@ export default async function HomePage() {
 
       <EditableTimeCollections primaryTask={primaryTask} primaryRoute={primaryRoute} posts={primaryPosts} timeSections={timeSections} />
       <div className="mx-auto max-w-6xl px-4 py-6">
-  <Ads slot="sidebar" showLabel eager className="mx-auto w-full" />
+  <Ads slot="in-feed" showLabel eager className="mx-auto w-full" />
 </div>
       <EditableHomeCta />
       </main>
